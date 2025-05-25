@@ -584,6 +584,11 @@ class WealthTrackerAPITester:
         # Projection Tests
         print(f"\n📈 Net Worth Projection Tests")
         self.test_projections_calculation()
+        
+        # Enhanced SIP Projection Tests
+        print(f"\n📈 Enhanced SIP Projection Tests")
+        self.test_sip_projections_calculation()
+        self.test_step_up_sip_calculation()
 
         # Enhanced Dashboard Tests
         print(f"\n📊 Enhanced Dashboard Tests")
