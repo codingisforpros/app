@@ -312,6 +312,166 @@ class WealthTrackerAPITester:
         else:
             return self.log_test("Projections Calculation", False, f"Response: {response}")
 
+    def test_create_sip_asset(self) -> Optional[str]:
+        """Test creating an asset with SIP enabled"""
+        data = {
+            "asset_type": "mutual_funds",
+            "name": "Test SIP Mutual Fund",
+            "purchase_value": 5000.0,
+            "current_value": 5500.0,
+            "purchase_date": (datetime.now() - timedelta(days=30)).isoformat(),
+            "metadata": {"fund_type": "equity"},
+            # SIP fields
+            "monthly_sip_amount": 5000.0,
+            "sip_start_date": datetime.now().isoformat(),
+            "step_up_percentage": 10.0,
+            "is_sip_active": True
+        }
+        
+        success, response = self.make_request("POST", "assets", data, 200, auth_required=True)
+        
+        if success and "id" in response:
+            asset_id = response["id"]
+            self.created_assets.append(asset_id)
+            
+            # Verify SIP fields are saved correctly
+            sip_amount = response.get("monthly_sip_amount", 0)
+            step_up = response.get("step_up_percentage", 0)
+            is_active = response.get("is_sip_active", False)
+            
+            if sip_amount == 5000.0 and step_up == 10.0 and is_active:
+                self.log_test("Create SIP Asset", True, 
+                             f"SIP: ₹{sip_amount}/month, Step-up: {step_up}%")
+                return asset_id
+            else:
+                self.log_test("Create SIP Asset", False, 
+                             f"SIP fields incorrect: Amount={sip_amount}, Step-up={step_up}, Active={is_active}")
+                return asset_id
+        else:
+            self.log_test("Create SIP Asset", False, f"Response: {response}")
+            return None
+
+    def test_update_sip_asset(self, asset_id: str) -> bool:
+        """Test updating SIP configuration of an asset"""
+        data = {
+            "name": "Updated SIP Mutual Fund",
+            "current_value": 6000.0,
+            "monthly_sip_amount": 7000.0,
+            "step_up_percentage": 15.0,
+            "is_sip_active": True
+        }
+        
+        success, response = self.make_request("PUT", f"assets/{asset_id}", data, 200, auth_required=True)
+        
+        if success and "monthly_sip_amount" in response:
+            sip_amount = response.get("monthly_sip_amount", 0)
+            step_up = response.get("step_up_percentage", 0)
+            
+            if sip_amount == 7000.0 and step_up == 15.0:
+                return self.log_test("Update SIP Asset", True, 
+                                   f"Updated SIP: ₹{sip_amount}/month, Step-up: {step_up}%")
+            else:
+                return self.log_test("Update SIP Asset", False, 
+                                   f"SIP update failed: Amount={sip_amount}, Step-up={step_up}")
+        else:
+            return self.log_test("Update SIP Asset", False, f"Response: {response}")
+
+    def test_sip_projections_calculation(self) -> bool:
+        """Test net worth projections with SIP calculations"""
+        projection_data = [
+            {
+                "asset_class": "mutual_funds",
+                "current_value": 50000.0,
+                "annual_growth_rate": 12.0,
+                "annual_investment": 10000.0,
+                "years": 10,
+                # SIP fields
+                "monthly_sip_amount": 5000.0,
+                "step_up_percentage": 10.0
+            },
+            {
+                "asset_class": "stocks",
+                "current_value": 100000.0,
+                "annual_growth_rate": 15.0,
+                "annual_investment": 20000.0,
+                "years": 10,
+                # SIP fields
+                "monthly_sip_amount": 3000.0,
+                "step_up_percentage": 5.0
+            }
+        ]
+        
+        success, response = self.make_request("POST", "projections/calculate", projection_data, 
+                                            200, auth_required=True)
+        
+        if success and isinstance(response, list) and len(response) >= 10:
+            year_1 = response[0]
+            year_10 = response[9]
+            
+            # Check if SIP contributions are tracked separately
+            has_sip_tracking = ("sip_contribution" in year_1 and 
+                              "lumpsum_contribution" in year_1)
+            
+            if has_sip_tracking:
+                total_sip_year_10 = year_10.get("sip_contribution", 0)
+                total_lumpsum_year_10 = year_10.get("lumpsum_contribution", 0)
+                
+                return self.log_test("SIP Projections Calculation", True, 
+                                   f"Year 10: Total=₹{year_10['total_value']:.0f}, "
+                                   f"SIP=₹{total_sip_year_10:.0f}, "
+                                   f"Lumpsum=₹{total_lumpsum_year_10:.0f}")
+            else:
+                return self.log_test("SIP Projections Calculation", False, 
+                                   "SIP tracking fields missing in response")
+        else:
+            return self.log_test("SIP Projections Calculation", False, f"Response: {response}")
+
+    def test_step_up_sip_calculation(self) -> bool:
+        """Test step-up SIP calculation logic"""
+        projection_data = [
+            {
+                "asset_class": "mutual_funds",
+                "current_value": 0.0,  # Start with zero to see pure SIP effect
+                "annual_growth_rate": 12.0,
+                "annual_investment": 0.0,  # No lumpsum
+                "years": 3,
+                "monthly_sip_amount": 1000.0,  # ₹1000/month
+                "step_up_percentage": 20.0  # 20% annual increase
+            }
+        ]
+        
+        success, response = self.make_request("POST", "projections/calculate", projection_data, 
+                                            200, auth_required=True)
+        
+        if success and isinstance(response, list) and len(response) >= 3:
+            year_1_sip = response[0].get("sip_contribution", 0)
+            year_2_sip = response[1].get("sip_contribution", 0)
+            year_3_sip = response[2].get("sip_contribution", 0)
+            
+            # Year 1: 12 * 1000 = 12,000
+            # Year 2: 12 * 1200 = 14,400 (20% step-up)
+            # Year 3: 12 * 1440 = 17,280 (another 20% step-up)
+            
+            expected_year_1 = 12000
+            expected_year_2 = 14400
+            expected_year_3 = 17280
+            
+            tolerance = 100  # Allow small rounding differences
+            
+            year_1_ok = abs(year_1_sip - expected_year_1) <= tolerance
+            year_2_ok = abs(year_2_sip - expected_year_2) <= tolerance
+            year_3_ok = abs(year_3_sip - expected_year_3) <= tolerance
+            
+            if year_1_ok and year_2_ok and year_3_ok:
+                return self.log_test("Step-up SIP Calculation", True, 
+                                   f"Y1: ₹{year_1_sip:.0f}, Y2: ₹{year_2_sip:.0f}, Y3: ₹{year_3_sip:.0f}")
+            else:
+                return self.log_test("Step-up SIP Calculation", False, 
+                                   f"Expected Y1: ₹{expected_year_1}, Y2: ₹{expected_year_2}, Y3: ₹{expected_year_3} "
+                                   f"Got Y1: ₹{year_1_sip:.0f}, Y2: ₹{year_2_sip:.0f}, Y3: ₹{year_3_sip:.0f}")
+        else:
+            return self.log_test("Step-up SIP Calculation", False, f"Response: {response}")
+
     def test_dashboard_with_gold_updates(self) -> bool:
         """Test dashboard with gold price auto-updates"""
         success, response = self.make_request("GET", "dashboard", auth_required=True)
