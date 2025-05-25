@@ -16,6 +16,7 @@ class WealthTrackerAPITester:
         self.test_user_password = "TestPass123!"
         self.test_user_name = "Test User"
         self.created_assets = []
+        self.created_milestones = []
 
     def log_test(self, name: str, success: bool, details: str = ""):
         """Log test results"""
