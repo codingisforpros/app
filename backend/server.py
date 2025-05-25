@@ -83,6 +83,11 @@ class AssetCreate(BaseModel):
     current_value: float
     purchase_date: datetime
     metadata: Optional[Dict[str, Any]] = {}
+    # SIP fields
+    monthly_sip_amount: Optional[float] = 0
+    sip_start_date: Optional[datetime] = None
+    step_up_percentage: Optional[float] = 0
+    is_sip_active: Optional[bool] = False
 
 class Asset(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
