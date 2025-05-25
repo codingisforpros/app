@@ -201,6 +201,151 @@ class WealthTrackerAPITester:
         
         return self.log_test("Unauthorized Access", success, "Correctly rejected unauthorized request")
 
+    def test_gold_prices_api(self) -> bool:
+        """Test gold prices API endpoint"""
+        success, response = self.make_request("GET", "gold-prices", expected_status=200)
+        
+        if success and all(field in response for field in ["gold_22k", "gold_24k", "timestamp", "unit"]):
+            return self.log_test("Gold Prices API", True, 
+                               f"22K: ₹{response['gold_22k']}, 24K: ₹{response['gold_24k']}")
+        else:
+            return self.log_test("Gold Prices API", False, f"Response: {response}")
+
+    def test_gold_value_calculation(self) -> bool:
+        """Test gold value calculation endpoint"""
+        success, response = self.make_request("POST", "gold/calculate-value?weight_grams=50&purity=24k", 
+                                            expected_status=200)
+        
+        if success and all(field in response for field in ["weight_grams", "purity", "rate_per_gram", "current_value"]):
+            return self.log_test("Gold Value Calculation", True, 
+                               f"50g 24K = ₹{response['current_value']}")
+        else:
+            return self.log_test("Gold Value Calculation", False, f"Response: {response}")
+
+    def test_create_gold_asset(self) -> Optional[str]:
+        """Test creating a gold asset with auto-calculation"""
+        data = {
+            "asset_type": "gold",
+            "name": "Test Gold Jewelry",
+            "purchase_value": 250000.0,
+            "current_value": 0.0,  # Should be auto-calculated
+            "purchase_date": (datetime.now() - timedelta(days=30)).isoformat(),
+            "metadata": {
+                "weight_grams": 50.0,
+                "purity": "22k"
+            }
+        }
+        
+        success, response = self.make_request("POST", "assets", data, 200, auth_required=True)
+        
+        if success and "id" in response:
+            asset_id = response["id"]
+            self.created_assets.append(asset_id)
+            auto_calculated = response.get("metadata", {}).get("auto_calculated", False)
+            current_value = response.get("current_value", 0)
+            
+            if auto_calculated and current_value > 0:
+                self.log_test("Create Gold Asset", True, 
+                             f"Auto-calculated value: ₹{current_value}")
+                return asset_id
+            else:
+                self.log_test("Create Gold Asset", False, 
+                             f"Auto-calculation failed. Value: {current_value}, Auto: {auto_calculated}")
+                return asset_id
+        else:
+            self.log_test("Create Gold Asset", False, f"Response: {response}")
+            return None
+
+    def test_create_milestone(self) -> Optional[str]:
+        """Test creating a financial milestone"""
+        data = {
+            "name": "₹1 Crore Net Worth Goal",
+            "target_amount": 10000000.0,
+            "target_date": (datetime.now() + timedelta(days=365*5)).isoformat()
+        }
+        
+        success, response = self.make_request("POST", "milestones", data, 200, auth_required=True)
+        
+        if success and "id" in response:
+            milestone_id = response["id"]
+            self.created_milestones.append(milestone_id)
+            return self.log_test("Create Milestone", True, 
+                               f"Target: ₹{response['target_amount']}")
+        else:
+            return self.log_test("Create Milestone", False, f"Response: {response}")
+
+    def test_get_milestones(self) -> bool:
+        """Test getting all milestones"""
+        success, response = self.make_request("GET", "milestones", auth_required=True)
+        
+        if success and isinstance(response, list):
+            return self.log_test("Get Milestones", True, f"Retrieved {len(response)} milestones")
+        else:
+            return self.log_test("Get Milestones", False, f"Response: {response}")
+
+    def test_projections_calculation(self) -> bool:
+        """Test net worth projections calculation"""
+        projection_data = [
+            {
+                "asset_class": "stocks",
+                "current_value": 100000.0,
+                "annual_growth_rate": 12.0,
+                "annual_investment": 50000.0,
+                "years": 10
+            },
+            {
+                "asset_class": "gold",
+                "current_value": 250000.0,
+                "annual_growth_rate": 8.0,
+                "annual_investment": 25000.0,
+                "years": 10
+            }
+        ]
+        
+        success, response = self.make_request("POST", "projections/calculate", projection_data, 
+                                            200, auth_required=True)
+        
+        if success and isinstance(response, list) and len(response) >= 10:
+            year_10 = response[9]
+            return self.log_test("Projections Calculation", True, 
+                               f"Year 10 projection: ₹{year_10['total_value']:.0f}")
+        else:
+            return self.log_test("Projections Calculation", False, f"Response: {response}")
+
+    def test_dashboard_with_gold_updates(self) -> bool:
+        """Test dashboard with gold price auto-updates"""
+        success, response = self.make_request("GET", "dashboard", auth_required=True)
+        
+        expected_fields = ["total_net_worth", "total_investment", "total_gain_loss", 
+                          "gain_loss_percentage", "asset_allocation", "recent_assets"]
+        
+        if success and all(field in response for field in expected_fields):
+            # Check if any gold assets have auto-updated values
+            gold_auto_updated = False
+            for asset in response.get("recent_assets", []):
+                if (asset.get("asset_type") == "gold" and 
+                    asset.get("metadata", {}).get("auto_calculated")):
+                    gold_auto_updated = True
+                    break
+            
+            details = f"Net worth: ₹{response['total_net_worth']:.0f}"
+            if gold_auto_updated:
+                details += ", Gold auto-updated ✓"
+            
+            return self.log_test("Dashboard with Gold Updates", True, details)
+        else:
+            return self.log_test("Dashboard with Gold Updates", False, f"Response: {response}")
+
+    def test_delete_milestone(self, milestone_id: str) -> bool:
+        """Test deleting a milestone"""
+        success, response = self.make_request("DELETE", f"milestones/{milestone_id}", 
+                                            expected_status=200, auth_required=True)
+        
+        if success and "message" in response:
+            return self.log_test("Delete Milestone", True, "Milestone deleted successfully")
+        else:
+            return self.log_test("Delete Milestone", False, f"Response: {response}")
+
     def test_asset_types(self) -> bool:
         """Test creating assets of different types"""
         asset_types = ["stocks", "mutual_funds", "cryptocurrency", "real_estate", 
