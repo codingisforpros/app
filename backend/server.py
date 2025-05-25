@@ -100,6 +100,11 @@ class Asset(BaseModel):
     metadata: Dict[str, Any] = {}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # SIP fields
+    monthly_sip_amount: float = 0
+    sip_start_date: Optional[datetime] = None
+    step_up_percentage: float = 0
+    is_sip_active: bool = False
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = None
