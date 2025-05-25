@@ -350,7 +350,7 @@ function App() {
                 onClick={logout}
                 className="p-2 text-gray-600 hover:text-gray-900"
               >
-                <LogoutIcon className="h-5 w-5" />
+                <ArrowRightOnRectangleIcon className="h-5 w-5" />
               </button>
             </div>
           </div>
