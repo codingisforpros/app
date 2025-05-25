@@ -127,6 +127,9 @@ class ProjectionInput(BaseModel):
     annual_growth_rate: float
     annual_investment: float
     years: int
+    # SIP fields
+    monthly_sip_amount: float = 0
+    step_up_percentage: float = 0
 
 class Milestone(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
