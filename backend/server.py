@@ -144,6 +144,8 @@ class ProjectionResult(BaseModel):
     total_value: float
     investment_added: float
     growth: float
+    sip_contribution: float = 0
+    lumpsum_contribution: float = 0
 
 class DashboardSummary(BaseModel):
     total_net_worth: float
