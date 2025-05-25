@@ -110,6 +110,10 @@ class AssetUpdate(BaseModel):
     name: Optional[str] = None
     current_value: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
+    # SIP fields
+    monthly_sip_amount: Optional[float] = None
+    step_up_percentage: Optional[float] = None
+    is_sip_active: Optional[bool] = None
 
 class GoldPrices(BaseModel):
     gold_22k: float
