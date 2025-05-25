@@ -418,14 +418,19 @@ async def delete_milestone(milestone_id: str, current_user: User = Depends(get_c
 # Projection endpoints
 @api_router.post("/projections/calculate")
 async def calculate_projections(projections: List[ProjectionInput], current_user: User = Depends(get_current_user)):
-    """Calculate net worth projections based on current assets and growth rates"""
+    """Calculate net worth projections based on current assets and growth rates with SIP support"""
     
     total_projections = []
     years = max(p.years for p in projections) if projections else 10
     
     # Initialize yearly totals
-    yearly_totals = {year: {"total_value": 0, "total_investment": 0, "total_growth": 0} 
-                    for year in range(1, years + 1)}
+    yearly_totals = {year: {
+        "total_value": 0, 
+        "total_investment": 0, 
+        "total_growth": 0,
+        "total_sip_contribution": 0,
+        "total_lumpsum_contribution": 0
+    } for year in range(1, years + 1)}
     
     # Calculate each asset class projection
     for projection in projections:
@@ -433,7 +438,9 @@ async def calculate_projections(projections: List[ProjectionInput], current_user
             projection.current_value,
             projection.annual_growth_rate,
             projection.annual_investment,
-            projection.years
+            projection.years,
+            projection.monthly_sip_amount,
+            projection.step_up_percentage
         )
         
         # Add to yearly totals
@@ -442,6 +449,8 @@ async def calculate_projections(projections: List[ProjectionInput], current_user
                 yearly_totals[result.year]["total_value"] += result.total_value
                 yearly_totals[result.year]["total_investment"] += result.investment_added
                 yearly_totals[result.year]["total_growth"] += result.growth
+                yearly_totals[result.year]["total_sip_contribution"] += result.sip_contribution
+                yearly_totals[result.year]["total_lumpsum_contribution"] += result.lumpsum_contribution
     
     # Convert to list format
     for year in range(1, years + 1):
@@ -449,7 +458,9 @@ async def calculate_projections(projections: List[ProjectionInput], current_user
             "year": year,
             "total_value": yearly_totals[year]["total_value"],
             "investment_added": yearly_totals[year]["total_investment"],
-            "growth": yearly_totals[year]["total_growth"]
+            "growth": yearly_totals[year]["total_growth"],
+            "sip_contribution": yearly_totals[year]["total_sip_contribution"],
+            "lumpsum_contribution": yearly_totals[year]["total_lumpsum_contribution"]
         })
     
     return total_projections
