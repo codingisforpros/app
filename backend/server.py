@@ -231,25 +231,48 @@ async def get_gold_prices() -> Optional[GoldPrices]:
         logging.error(f"Error fetching gold prices: {e}")
         return None
 
-def calculate_compound_growth(principal: float, annual_rate: float, annual_investment: float, years: int) -> List[ProjectionResult]:
-    """Calculate compound growth with annual investments"""
+def calculate_compound_growth(principal: float, annual_rate: float, annual_investment: float, years: int, 
+                            monthly_sip: float = 0, step_up_percentage: float = 0) -> List[ProjectionResult]:
+    """Calculate compound growth with annual investments and SIPs with step-ups"""
     results = []
     current_value = principal
+    current_monthly_sip = monthly_sip
     
     for year in range(1, years + 1):
-        # Add annual investment at the beginning of the year
+        # SIP contributions for the year (monthly compounding)
+        year_sip_contribution = 0
+        year_start_value = current_value
+        
+        # Monthly SIP processing
+        for month in range(1, 13):
+            # Add monthly SIP at the beginning of each month
+            if current_monthly_sip > 0:
+                current_value += current_monthly_sip
+                year_sip_contribution += current_monthly_sip
+            
+            # Apply monthly growth rate
+            monthly_rate = annual_rate / 100 / 12
+            current_value *= (1 + monthly_rate)
+        
+        # Add annual lump sum investment at year end
         current_value += annual_investment
         
-        # Apply growth rate
-        growth = current_value * (annual_rate / 100)
-        current_value += growth
+        # Calculate total growth for the year
+        year_end_value_without_investments = year_start_value * ((1 + annual_rate / 100) ** 1)
+        growth = current_value - year_start_value - year_sip_contribution - annual_investment
         
         results.append(ProjectionResult(
             year=year,
             total_value=current_value,
             investment_added=annual_investment,
-            growth=growth
+            growth=growth,
+            sip_contribution=year_sip_contribution,
+            lumpsum_contribution=annual_investment
         ))
+        
+        # Apply step-up to SIP for next year
+        if step_up_percentage > 0:
+            current_monthly_sip *= (1 + step_up_percentage / 100)
     
     return results
 
