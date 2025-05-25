@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, LogoutIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import './App.css';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
