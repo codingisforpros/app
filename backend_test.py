@@ -562,6 +562,12 @@ class WealthTrackerAPITester:
         # Test gold asset with auto-calculation
         gold_asset_id = self.test_create_gold_asset()
         
+        # Test SIP asset creation and management
+        print(f"\n💰 SIP Asset Management Tests")
+        sip_asset_id = self.test_create_sip_asset()
+        if sip_asset_id:
+            self.test_update_sip_asset(sip_asset_id)
+        
         # Test CRUD operations with first created asset
         if self.created_assets:
             first_asset = self.created_assets[0]
