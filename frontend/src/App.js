@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
-import { LineChart, Line as RechartsLine, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, ArrowRightOnRectangleIcon, ChartBarIcon, CurrencyDollarIcon, TrophyIcon } from '@heroicons/react/24/outline';
+import { LineChart, Line as RechartsLine, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Area, AreaChart, Bar, BarChart } from 'recharts';
+import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, ArrowRightOnRectangleIcon, ChartBarIcon, CurrencyDollarIcon, TrophyIcon, CogIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
 import './App.css';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
@@ -42,6 +42,7 @@ function App() {
   const [projections, setProjections] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [showProjectionSettings, setShowProjectionSettings] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
   const [loading, setLoading] = useState(false);
   
@@ -60,7 +61,12 @@ function App() {
     purchase_value: '',
     current_value: '',
     purchase_date: new Date().toISOString().split('T')[0],
-    metadata: {}
+    metadata: {},
+    // SIP fields
+    monthly_sip_amount: '',
+    sip_start_date: '',
+    step_up_percentage: '',
+    is_sip_active: false
   });
 
   // Milestone form states
@@ -72,6 +78,8 @@ function App() {
 
   // Projection states
   const [projectionInputs, setProjectionInputs] = useState([]);
+  const [customGrowthRates, setCustomGrowthRates] = useState(DEFAULT_GROWTH_RATES);
+  const [projectionYears, setProjectionYears] = useState(20);
 
   useEffect(() => {
     if (token) {
@@ -158,13 +166,27 @@ function App() {
     if (!dashboard) return;
 
     try {
-      const projectionData = Object.entries(dashboard.asset_allocation).map(([assetType, currentValue]) => ({
-        asset_class: assetType,
-        current_value: currentValue,
-        annual_growth_rate: DEFAULT_GROWTH_RATES[assetType] || 7,
-        annual_investment: currentValue * 0.1, // Assume 10% additional investment per year
-        years: 20
-      }));
+      const projectionData = Object.entries(dashboard.asset_allocation).map(([assetType, currentValue]) => {
+        // Get SIP data for this asset type from assets
+        const assetOfType = assets.find(asset => asset.asset_type === assetType && asset.is_sip_active);
+        const totalMonthlySIP = assets
+          .filter(asset => asset.asset_type === assetType && asset.is_sip_active)
+          .reduce((sum, asset) => sum + (asset.monthly_sip_amount || 0), 0);
+        const avgStepUp = assets
+          .filter(asset => asset.asset_type === assetType && asset.is_sip_active)
+          .reduce((sum, asset) => sum + (asset.step_up_percentage || 0), 0) / 
+          Math.max(assets.filter(asset => asset.asset_type === assetType && asset.is_sip_active).length, 1);
+
+        return {
+          asset_class: assetType,
+          current_value: currentValue,
+          annual_growth_rate: customGrowthRates[assetType] || 7,
+          annual_investment: currentValue * 0.05, // 5% additional investment per year
+          years: projectionYears,
+          monthly_sip_amount: totalMonthlySIP,
+          step_up_percentage: avgStepUp || 0
+        };
+      });
 
       setProjectionInputs(projectionData);
 
@@ -213,7 +235,10 @@ function App() {
         ...assetForm,
         purchase_value: parseFloat(assetForm.purchase_value),
         current_value: parseFloat(assetForm.current_value),
-        purchase_date: new Date(assetForm.purchase_date).toISOString()
+        purchase_date: new Date(assetForm.purchase_date).toISOString(),
+        monthly_sip_amount: parseFloat(assetForm.monthly_sip_amount) || 0,
+        step_up_percentage: parseFloat(assetForm.step_up_percentage) || 0,
+        sip_start_date: assetForm.sip_start_date ? new Date(assetForm.sip_start_date).toISOString() : null
       };
 
       // For gold assets, add weight and purity to metadata
@@ -229,7 +254,10 @@ function App() {
         await axios.put(`${API}/assets/${editingAsset.id}`, {
           name: assetData.name,
           current_value: assetData.current_value,
-          metadata: assetData.metadata
+          metadata: assetData.metadata,
+          monthly_sip_amount: assetData.monthly_sip_amount,
+          step_up_percentage: assetData.step_up_percentage,
+          is_sip_active: assetData.is_sip_active
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -247,7 +275,11 @@ function App() {
         purchase_value: '',
         current_value: '',
         purchase_date: new Date().toISOString().split('T')[0],
-        metadata: {}
+        metadata: {},
+        monthly_sip_amount: '',
+        sip_start_date: '',
+        step_up_percentage: '',
+        is_sip_active: false
       });
 
       if (currentView === 'assets') {
@@ -292,7 +324,11 @@ function App() {
       purchase_value: asset.purchase_value.toString(),
       current_value: asset.current_value.toString(),
       purchase_date: asset.purchase_date.split('T')[0],
-      metadata: asset.metadata || {}
+      metadata: asset.metadata || {},
+      monthly_sip_amount: asset.monthly_sip_amount?.toString() || '',
+      sip_start_date: asset.sip_start_date ? asset.sip_start_date.split('T')[0] : '',
+      step_up_percentage: asset.step_up_percentage?.toString() || '',
+      is_sip_active: asset.is_sip_active || false
     });
     setShowModal(true);
   };
@@ -328,6 +364,11 @@ function App() {
     }
   };
 
+  const updateProjectionSettings = () => {
+    generateProjections();
+    setShowProjectionSettings(false);
+  };
+
   const getPieChartData = () => {
     if (!dashboard?.asset_allocation) return null;
 
@@ -359,6 +400,13 @@ function App() {
   const calculateMilestoneProgress = (milestone) => {
     if (!dashboard) return 0;
     return Math.min((dashboard.total_net_worth / milestone.target_amount) * 100, 100);
+  };
+
+  const getProjectionChartData = () => {
+    return projections.map(projection => ({
+      ...projection,
+      sip_vs_lumpsum: projection.sip_contribution + projection.lumpsum_contribution
+    }));
   };
 
   if (!token) {
@@ -575,6 +623,9 @@ function App() {
                       <div>
                         <p className="font-medium text-gray-900">{asset.name}</p>
                         <p className="text-sm text-gray-500">{ASSET_TYPES[asset.asset_type]}</p>
+                        {asset.is_sip_active && (
+                          <p className="text-xs text-blue-600">SIP: {formatCurrency(asset.monthly_sip_amount)}/month</p>
+                        )}
                         {asset.metadata?.auto_calculated && (
                           <p className="text-xs text-green-600">Auto-updated</p>
                         )}
@@ -625,6 +676,7 @@ function App() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Value</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Value</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SIP Details</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gain/Loss</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -650,6 +702,18 @@ function App() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatCurrency(asset.current_value)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {asset.is_sip_active ? (
+                            <div className="text-sm">
+                              <div className="text-blue-600">{formatCurrency(asset.monthly_sip_amount)}/month</div>
+                              {asset.step_up_percentage > 0 && (
+                                <div className="text-xs text-gray-500">Step-up: {asset.step_up_percentage}%</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No SIP</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className={`text-sm ${gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -685,13 +749,22 @@ function App() {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">Net Worth Projections</h2>
-              <button
-                onClick={() => setShowMilestoneModal(true)}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
-              >
-                <TrophyIcon className="h-4 w-4" />
-                <span>Add Milestone</span>
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowProjectionSettings(true)}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                >
+                  <AdjustmentsHorizontalIcon className="h-4 w-4" />
+                  <span>Settings</span>
+                </button>
+                <button
+                  onClick={() => setShowMilestoneModal(true)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                >
+                  <TrophyIcon className="h-4 w-4" />
+                  <span>Add Milestone</span>
+                </button>
+              </div>
             </div>
 
             {/* Milestones */}
@@ -746,10 +819,10 @@ function App() {
             {/* Projection Chart */}
             {projections.length > 0 && (
               <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">20-Year Net Worth Projection</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">{projectionYears}-Year Net Worth Projection with SIP</h3>
                 <div className="h-96">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={projections}>
+                    <AreaChart data={getProjectionChartData()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="year" />
                       <YAxis tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`} />
@@ -763,14 +836,22 @@ function App() {
                         stroke="#3B82F6" 
                         fill="#93C5FD" 
                         fillOpacity={0.6}
-                        name="Projected Net Worth"
+                        name="Total Net Worth"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="sip_contribution" 
+                        stroke="#10B981" 
+                        fill="#6EE7B7" 
+                        fillOpacity={0.4}
+                        name="SIP Contribution"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
                 
                 {/* Projection Summary */}
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h4 className="text-sm font-medium text-blue-800">Current Net Worth</h4>
                     <p className="text-xl font-bold text-blue-900">
@@ -784,9 +865,15 @@ function App() {
                     </p>
                   </div>
                   <div className="bg-purple-50 p-4 rounded-lg">
-                    <h4 className="text-sm font-medium text-purple-800">20-Year Projection</h4>
+                    <h4 className="text-sm font-medium text-purple-800">{projectionYears}-Year Projection</h4>
                     <p className="text-xl font-bold text-purple-900">
-                      {projections[19] ? formatCurrency(projections[19].total_value) : '₹0'}
+                      {projections[projectionYears-1] ? formatCurrency(projections[projectionYears-1].total_value) : '₹0'}
+                    </p>
+                  </div>
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-orange-800">Total SIP ({projectionYears} years)</h4>
+                    <p className="text-xl font-bold text-orange-900">
+                      {projections[projectionYears-1] ? formatCurrency(projections[projectionYears-1].sip_contribution * projectionYears) : '₹0'}
                     </p>
                   </div>
                 </div>
@@ -799,13 +886,13 @@ function App() {
       {/* Add/Edit Asset Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style={{pointerEvents: 'none'}}>
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" style={{pointerEvents: 'auto'}}>
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white" style={{pointerEvents: 'auto'}}>
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
                 {editingAsset ? 'Edit Asset' : 'Add New Asset'}
               </h3>
               
-              <form onSubmit={handleAssetSubmit} className="space-y-4">
+              <form onSubmit={handleAssetSubmit} className="space-y-4 max-h-96 overflow-y-auto">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Asset Type</label>
                   <select
@@ -906,6 +993,60 @@ function App() {
                   </div>
                 )}
 
+                {/* SIP Configuration */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <input
+                      type="checkbox"
+                      id="is_sip_active"
+                      checked={assetForm.is_sip_active}
+                      onChange={(e) => setAssetForm({...assetForm, is_sip_active: e.target.checked})}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="is_sip_active" className="text-sm font-medium text-gray-700">
+                      Enable SIP (Systematic Investment Plan)
+                    </label>
+                  </div>
+
+                  {assetForm.is_sip_active && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Monthly SIP Amount</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={assetForm.monthly_sip_amount}
+                            onChange={(e) => setAssetForm({...assetForm, monthly_sip_amount: e.target.value})}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                            placeholder="5000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Step-up % (Annual)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={assetForm.step_up_percentage}
+                            onChange={(e) => setAssetForm({...assetForm, step_up_percentage: e.target.value})}
+                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                            placeholder="10"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">SIP Start Date</label>
+                        <input
+                          type="date"
+                          value={assetForm.sip_start_date}
+                          onChange={(e) => setAssetForm({...assetForm, sip_start_date: e.target.value})}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
@@ -918,7 +1059,11 @@ function App() {
                         purchase_value: '',
                         current_value: '',
                         purchase_date: new Date().toISOString().split('T')[0],
-                        metadata: {}
+                        metadata: {},
+                        monthly_sip_amount: '',
+                        sip_start_date: '',
+                        step_up_percentage: '',
+                        is_sip_active: false
                       });
                     }}
                     className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
@@ -1003,6 +1148,71 @@ function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Projection Settings Modal */}
+      {showProjectionSettings && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style={{pointerEvents: 'none'}}>
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white" style={{pointerEvents: 'auto'}}>
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Projection Settings</h3>
+              
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Projection Years</label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="50"
+                    value={projectionYears}
+                    onChange={(e) => setProjectionYears(parseInt(e.target.value))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-3">Expected Annual Returns (%)</h4>
+                  <div className="space-y-3">
+                    {Object.entries(ASSET_TYPES).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <label className="text-sm text-gray-700">{value}</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="50"
+                          value={customGrowthRates[key]}
+                          onChange={(e) => setCustomGrowthRates({
+                            ...customGrowthRates,
+                            [key]: parseFloat(e.target.value)
+                          })}
+                          className="w-20 p-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowProjectionSettings(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={updateProjectionSettings}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Update Projections
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
