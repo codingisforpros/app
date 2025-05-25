@@ -362,12 +362,14 @@ class WealthTrackerAPITester:
     def cleanup_test_data(self):
         """Clean up created test data"""
         print(f"\n🧹 Cleaning up test data...")
+        for milestone_id in self.created_milestones:
+            self.test_delete_milestone(milestone_id)
         for asset_id in self.created_assets:
             self.test_delete_asset(asset_id)
 
     def run_all_tests(self) -> int:
         """Run all tests"""
-        print(f"🚀 Starting Wealth Tracker API Tests")
+        print(f"🚀 Starting Enhanced Wealth Tracker API Tests")
         print(f"📍 Testing against: {self.base_url}")
         print(f"👤 Test user: {self.test_user_email}")
         print("=" * 60)
@@ -386,11 +388,19 @@ class WealthTrackerAPITester:
         self.test_user_login()  # Test login with existing user
         self.test_unauthorized_access()
 
+        # Gold Price API Tests
+        print(f"\n🥇 Gold Price API Tests")
+        self.test_gold_prices_api()
+        self.test_gold_value_calculation()
+
         # Asset Management Tests
         print(f"\n📊 Asset Management Tests")
         
-        # Test different asset types
+        # Test different asset types including gold
         self.test_asset_types()
+        
+        # Test gold asset with auto-calculation
+        gold_asset_id = self.test_create_gold_asset()
         
         # Test CRUD operations with first created asset
         if self.created_assets:
@@ -400,9 +410,18 @@ class WealthTrackerAPITester:
         
         self.test_get_assets()
 
-        # Dashboard Tests
-        print(f"\n📈 Dashboard Tests")
-        self.test_dashboard()
+        # Milestone Tests
+        print(f"\n🎯 Milestone Management Tests")
+        self.test_create_milestone()
+        self.test_get_milestones()
+
+        # Projection Tests
+        print(f"\n📈 Net Worth Projection Tests")
+        self.test_projections_calculation()
+
+        # Enhanced Dashboard Tests
+        print(f"\n📊 Enhanced Dashboard Tests")
+        self.test_dashboard_with_gold_updates()
 
         # Cleanup
         self.cleanup_test_data()
@@ -413,6 +432,11 @@ class WealthTrackerAPITester:
         
         if self.tests_passed == self.tests_run:
             print("🎉 All tests passed!")
+            print("✅ Gold Price API integration working")
+            print("✅ Auto-calculation for gold assets working")
+            print("✅ Net Worth Projections working")
+            print("✅ Milestone management working")
+            print("✅ Enhanced dashboard working")
             return 0
         else:
             print(f"⚠️  {self.tests_run - self.tests_passed} tests failed")
