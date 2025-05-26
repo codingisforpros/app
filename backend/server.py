@@ -941,6 +941,137 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
         recent_assets=recent_assets
     )
 
+# Advanced Analytics endpoints
+@api_router.get("/analytics/monte-carlo")
+async def get_monte_carlo_simulation(
+    years: int = 20,
+    volatility: float = 15.0,
+    simulations: int = 10000,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Monte Carlo simulation for portfolio projections"""
+    try:
+        # Get user's current portfolio
+        dashboard = await get_dashboard(current_user)
+        
+        if dashboard.total_net_worth == 0:
+            raise HTTPException(status_code=400, detail="No portfolio data available for simulation")
+        
+        # Use weighted average return based on asset allocation
+        weighted_return = 0
+        for asset_type, value in dashboard.asset_allocation.items():
+            weight = value / dashboard.total_net_worth
+            return_rate = {
+                "stocks": 12, "mutual_funds": 10, "cryptocurrency": 15,
+                "real_estate": 8, "fixed_deposits": 6, "gold": 8, "others": 7
+            }.get(asset_type, 8)
+            weighted_return += weight * return_rate
+        
+        # Estimate annual investment from SIP data
+        assets = await db.assets.find({"user_id": current_user.id}).to_list(1000)
+        annual_sip = sum(asset.get("monthly_sip_amount", 0) * 12 for asset in assets)
+        
+        result = run_monte_carlo_simulation(
+            initial_value=dashboard.total_net_worth,
+            annual_return=weighted_return,
+            volatility=volatility,
+            annual_investment=annual_sip,
+            years=years,
+            simulations=simulations
+        )
+        
+        return result
+    except Exception as e:
+        logging.error(f"Error in Monte Carlo simulation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate Monte Carlo simulation")
+
+@api_router.get("/analytics/financial-health-score")
+async def get_financial_health_score(current_user: User = Depends(get_current_user)):
+    """Calculate comprehensive financial health score"""
+    try:
+        # Get user's assets and dashboard
+        assets_data = await db.assets.find({"user_id": current_user.id}).to_list(1000)
+        assets = [Asset(**asset) for asset in assets_data]
+        
+        dashboard_data = await get_dashboard(current_user)
+        
+        result = calculate_financial_health_score(assets, dashboard_data)
+        return result
+    except Exception as e:
+        logging.error(f"Error calculating financial health score: {e}")
+        raise HTTPException(status_code=500, detail="Failed to calculate financial health score")
+
+@api_router.get("/analytics/performance-attribution")
+async def get_performance_attribution(current_user: User = Depends(get_current_user)):
+    """Get detailed performance attribution analysis"""
+    try:
+        # Get user's assets and dashboard
+        assets_data = await db.assets.find({"user_id": current_user.id}).to_list(1000)
+        assets = [Asset(**asset) for asset in assets_data]
+        
+        dashboard_data = await get_dashboard(current_user)
+        
+        result = calculate_performance_attribution(assets, dashboard_data)
+        return result
+    except Exception as e:
+        logging.error(f"Error calculating performance attribution: {e}")
+        raise HTTPException(status_code=500, detail="Failed to calculate performance attribution")
+
+@api_router.get("/analytics/tax-optimization")
+async def get_tax_optimization(current_user: User = Depends(get_current_user)):
+    """Get comprehensive tax optimization analysis"""
+    try:
+        # Get user's assets
+        assets_data = await db.assets.find({"user_id": current_user.id}).to_list(1000)
+        assets = [Asset(**asset) for asset in assets_data]
+        
+        result = calculate_tax_optimization(assets)
+        return result
+    except Exception as e:
+        logging.error(f"Error calculating tax optimization: {e}")
+        raise HTTPException(status_code=500, detail="Failed to calculate tax optimization")
+
+@api_router.get("/analytics/comprehensive-report")
+async def get_comprehensive_analytics_report(current_user: User = Depends(get_current_user)):
+    """Get all analytics in one comprehensive report"""
+    try:
+        # Get user's assets and dashboard
+        assets_data = await db.assets.find({"user_id": current_user.id}).to_list(1000)
+        assets = [Asset(**asset) for asset in assets_data]
+        
+        dashboard_data = await get_dashboard(current_user)
+        
+        # Run all analytics
+        health_score = calculate_financial_health_score(assets, dashboard_data)
+        performance = calculate_performance_attribution(assets, dashboard_data)
+        tax_analysis = calculate_tax_optimization(assets)
+        
+        # Monte Carlo with default parameters
+        monte_carlo = None
+        if dashboard_data.total_net_worth > 0:
+            weighted_return = 10  # Default conservative estimate
+            annual_sip = sum(asset.get("monthly_sip_amount", 0) * 12 for asset in assets_data)
+            
+            monte_carlo = run_monte_carlo_simulation(
+                initial_value=dashboard_data.total_net_worth,
+                annual_return=weighted_return,
+                volatility=15.0,
+                annual_investment=annual_sip,
+                years=20,
+                simulations=1000  # Reduced for faster response
+            )
+        
+        return {
+            "financial_health_score": health_score,
+            "performance_attribution": performance,
+            "tax_optimization": tax_analysis,
+            "monte_carlo_projection": monte_carlo,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logging.error(f"Error generating comprehensive report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate comprehensive analytics report")
+
 # Include the router in the main app
 app.include_router(api_router)
 
