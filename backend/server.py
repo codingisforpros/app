@@ -290,6 +290,358 @@ async def get_gold_prices() -> Optional[GoldPrices]:
         logging.error(f"Error fetching gold prices: {e}")
         return None
 
+# ASSET_TYPES dictionary for reference
+ASSET_TYPES_DICT = {
+    "stocks": "Stocks",
+    "mutual_funds": "Mutual Funds", 
+    "cryptocurrency": "Cryptocurrency",
+    "real_estate": "Real Estate",
+    "fixed_deposits": "Fixed Deposits",
+    "gold": "Gold",
+    "others": "Others"
+}
+
+# Advanced Analytics Functions
+def run_monte_carlo_simulation(initial_value: float, annual_return: float, volatility: float, 
+                              annual_investment: float, years: int, simulations: int = 10000) -> MonteCarloResult:
+    """Run Monte Carlo simulation for wealth projections"""
+    np.random.seed(42)  # For reproducible results
+    
+    results = []
+    
+    for _ in range(simulations):
+        portfolio_value = initial_value
+        yearly_values = [portfolio_value]
+        
+        for year in range(years):
+            # Add annual investment
+            portfolio_value += annual_investment
+            
+            # Generate random return based on normal distribution
+            annual_return_this_year = np.random.normal(annual_return, volatility)
+            
+            # Apply return
+            portfolio_value *= (1 + annual_return_this_year / 100)
+            yearly_values.append(portfolio_value)
+        
+        results.append(yearly_values[1:])  # Exclude initial value
+    
+    # Calculate percentiles for each year
+    results_array = np.array(results)
+    
+    percentile_10 = np.percentile(results_array, 10, axis=0).tolist()
+    percentile_25 = np.percentile(results_array, 25, axis=0).tolist()
+    percentile_50 = np.percentile(results_array, 50, axis=0).tolist()
+    percentile_75 = np.percentile(results_array, 75, axis=0).tolist()
+    percentile_90 = np.percentile(results_array, 90, axis=0).tolist()
+    
+    final_values = {
+        "worst_case": float(percentile_10[-1]),
+        "pessimistic": float(percentile_25[-1]),
+        "most_likely": float(percentile_50[-1]),
+        "optimistic": float(percentile_75[-1]),
+        "best_case": float(percentile_90[-1])
+    }
+    
+    return MonteCarloResult(
+        percentile_10=percentile_10,
+        percentile_25=percentile_25,
+        percentile_50=percentile_50,
+        percentile_75=percentile_75,
+        percentile_90=percentile_90,
+        years=list(range(1, years + 1)),
+        confidence_range="80% (10th to 90th percentile)",
+        final_values=final_values
+    )
+
+def calculate_financial_health_score(assets: List[Asset], dashboard: DashboardSummary) -> FinancialHealthScore:
+    """Calculate comprehensive financial health score (0-1000)"""
+    
+    scores = {}
+    recommendations = []
+    strengths = []
+    areas_for_improvement = []
+    
+    # 1. Portfolio Diversification (0-200 points)
+    if dashboard.asset_allocation:
+        asset_count = len(dashboard.asset_allocation)
+        max_allocation = max(dashboard.asset_allocation.values()) / dashboard.total_net_worth * 100
+        
+        diversification_score = min(200, (asset_count * 30) + (100 - max_allocation) * 2)
+        scores["diversification"] = int(diversification_score)
+        
+        if max_allocation > 70:
+            areas_for_improvement.append("Portfolio is heavily concentrated in one asset class")
+            recommendations.append("Consider diversifying across more asset classes")
+        else:
+            strengths.append("Well-diversified portfolio across multiple asset classes")
+    else:
+        scores["diversification"] = 0
+    
+    # 2. Investment Consistency (0-200 points) - SIP analysis
+    sip_assets = [asset for asset in assets if asset.is_sip_active]
+    sip_score = min(200, len(sip_assets) * 50 + (len(sip_assets) > 0) * 50)
+    scores["consistency"] = sip_score
+    
+    if len(sip_assets) > 0:
+        strengths.append(f"Consistent SIP investments in {len(sip_assets)} assets")
+    else:
+        areas_for_improvement.append("No systematic investment plans (SIPs) active")
+        recommendations.append("Consider starting SIPs for regular investing")
+    
+    # 3. Growth Performance (0-200 points)
+    if dashboard.gain_loss_percentage >= 15:
+        growth_score = 200
+        strengths.append("Excellent portfolio performance")
+    elif dashboard.gain_loss_percentage >= 10:
+        growth_score = 150
+        strengths.append("Good portfolio performance")
+    elif dashboard.gain_loss_percentage >= 5:
+        growth_score = 100
+    elif dashboard.gain_loss_percentage >= 0:
+        growth_score = 50
+    else:
+        growth_score = 0
+        areas_for_improvement.append("Portfolio showing negative returns")
+        recommendations.append("Review and rebalance portfolio allocation")
+    
+    scores["performance"] = growth_score
+    
+    # 4. Net Worth Growth (0-200 points)
+    net_worth_tier = dashboard.total_net_worth
+    if net_worth_tier >= 10000000:  # 1 crore+
+        net_worth_score = 200
+        strengths.append("Achieved significant wealth accumulation")
+    elif net_worth_tier >= 5000000:  # 50 lakh+
+        net_worth_score = 150
+        strengths.append("Strong wealth accumulation progress")
+    elif net_worth_tier >= 1000000:  # 10 lakh+
+        net_worth_score = 100
+    elif net_worth_tier >= 500000:  # 5 lakh+
+        net_worth_score = 75
+    elif net_worth_tier >= 100000:  # 1 lakh+
+        net_worth_score = 50
+    else:
+        net_worth_score = 25
+        recommendations.append("Focus on increasing monthly investments")
+    
+    scores["wealth_accumulation"] = net_worth_score
+    
+    # 5. Risk Management (0-200 points) - Asset allocation analysis
+    risk_score = 100  # Base score
+    if dashboard.asset_allocation:
+        # Check for high-risk concentration
+        risky_assets = ["cryptocurrency", "stocks"]
+        risky_allocation = sum(v for k, v in dashboard.asset_allocation.items() if k in risky_assets)
+        risky_percentage = risky_allocation / dashboard.total_net_worth * 100
+        
+        if risky_percentage > 80:
+            risk_score = 50
+            recommendations.append("Consider reducing high-risk asset concentration")
+        elif risky_percentage > 60:
+            risk_score = 100
+        else:
+            risk_score = 150
+            strengths.append("Balanced risk allocation")
+        
+        # Bonus for defensive assets
+        safe_assets = ["fixed_deposits", "gold"]
+        safe_allocation = sum(v for k, v in dashboard.asset_allocation.items() if k in safe_assets)
+        safe_percentage = safe_allocation / dashboard.total_net_worth * 100
+        
+        if safe_percentage >= 20:
+            risk_score += 50
+            strengths.append("Good defensive asset allocation")
+    
+    scores["risk_management"] = min(200, risk_score)
+    
+    # Calculate overall score
+    overall_score = sum(scores.values())
+    
+    # Add general recommendations
+    if overall_score >= 800:
+        strengths.append("Excellent overall financial health")
+    elif overall_score >= 600:
+        recommendations.append("Consider minor optimizations to reach excellent tier")
+    elif overall_score >= 400:
+        recommendations.append("Focus on diversification and consistent investing")
+    else:
+        recommendations.append("Significant improvements needed in financial planning")
+    
+    return FinancialHealthScore(
+        overall_score=overall_score,
+        category_scores=scores,
+        recommendations=recommendations,
+        strengths=strengths,
+        areas_for_improvement=areas_for_improvement
+    )
+
+def calculate_performance_attribution(assets: List[Asset], dashboard: DashboardSummary) -> PerformanceAttribution:
+    """Calculate detailed performance attribution analysis"""
+    
+    asset_contributions = {}
+    time_weighted_returns = {}
+    best_performers = []
+    worst_performers = []
+    
+    # Calculate contribution by each asset
+    for asset in assets:
+        gain_loss = asset.current_value - asset.purchase_value
+        contribution_to_portfolio = gain_loss / dashboard.total_investment * 100 if dashboard.total_investment > 0 else 0
+        asset_contributions[asset.name] = contribution_to_portfolio
+        
+        # Calculate individual asset return
+        asset_return = (asset.current_value - asset.purchase_value) / asset.purchase_value * 100 if asset.purchase_value > 0 else 0
+        time_weighted_returns[asset.name] = asset_return
+        
+        # Track best/worst performers
+        asset_data = {
+            "name": asset.name,
+            "asset_type": asset.asset_type,
+            "return_percentage": asset_return,
+            "contribution": contribution_to_portfolio,
+            "current_value": asset.current_value
+        }
+        
+        if asset_return > 0:
+            best_performers.append(asset_data)
+        else:
+            worst_performers.append(asset_data)
+    
+    # Sort performers
+    best_performers.sort(key=lambda x: x["return_percentage"], reverse=True)
+    worst_performers.sort(key=lambda x: x["return_percentage"])
+    
+    # Sector analysis by asset type
+    sector_analysis = {}
+    for asset_type, value in dashboard.asset_allocation.items():
+        allocation_percentage = value / dashboard.total_net_worth * 100 if dashboard.total_net_worth > 0 else 0
+        
+        # Calculate sector returns
+        sector_assets = [a for a in assets if a.asset_type == asset_type]
+        if sector_assets:
+            sector_return = sum((a.current_value - a.purchase_value) / a.purchase_value * 100 if a.purchase_value > 0 else 0
+                              for a in sector_assets) / len(sector_assets)
+        else:
+            sector_return = 0
+        
+        sector_analysis[ASSET_TYPES_DICT.get(asset_type, asset_type)] = {
+            "allocation_percentage": allocation_percentage,
+            "average_return": sector_return,
+            "total_value": value
+        }
+    
+    # Simple correlation matrix (for demonstration)
+    correlation_matrix = {}
+    asset_types = list(dashboard.asset_allocation.keys())
+    for i, type1 in enumerate(asset_types):
+        correlation_matrix[ASSET_TYPES_DICT.get(type1, type1)] = {}
+        for j, type2 in enumerate(asset_types):
+            # Simplified correlation (in real world, you'd use price history)
+            if i == j:
+                correlation = 1.0
+            else:
+                correlation = np.random.uniform(0.1, 0.8)  # Mock correlation
+            correlation_matrix[ASSET_TYPES_DICT.get(type1, type1)][ASSET_TYPES_DICT.get(type2, type2)] = round(correlation, 2)
+    
+    return PerformanceAttribution(
+        asset_contributions=asset_contributions,
+        sector_analysis=sector_analysis,
+        time_weighted_returns=time_weighted_returns,
+        best_performers=best_performers[:5],  # Top 5
+        worst_performers=worst_performers[:5],  # Bottom 5
+        correlation_matrix=correlation_matrix
+    )
+
+def calculate_tax_optimization(assets: List[Asset]) -> TaxOptimization:
+    """Calculate comprehensive tax optimization analysis"""
+    
+    current_date = datetime.now()
+    ltcg_liability = 0
+    stcg_liability = 0
+    tax_saving_opportunities = []
+    harvesting_suggestions = []
+    
+    # Indian tax rates (as of 2024)
+    LTCG_RATE = 0.125  # 12.5% on gains above 1.25 lakh
+    STCG_RATE = 0.20   # 20% on short term gains
+    LTCG_EXEMPTION = 125000  # 1.25 lakh exemption for LTCG
+    
+    total_ltcg = 0
+    total_stcg = 0
+    
+    for asset in assets:
+        purchase_date = asset.purchase_date
+        gain_loss = asset.current_value - asset.purchase_value
+        
+        if gain_loss > 0:  # Only tax on gains
+            # Determine if LTCG or STCG based on holding period
+            holding_days = (current_date - purchase_date).days
+            
+            # For equity/equity MF: >365 days = LTCG, else STCG
+            # For other assets: >36 months = LTCG, else STCG
+            is_equity = asset.asset_type in ["stocks", "mutual_funds", "cryptocurrency"]
+            ltcg_threshold_days = 365 if is_equity else 1095  # 36 months
+            
+            if holding_days > ltcg_threshold_days:
+                total_ltcg += gain_loss
+            else:
+                total_stcg += gain_loss
+                
+                # Suggest holding for LTCG if close to threshold
+                days_to_ltcg = ltcg_threshold_days - holding_days
+                if days_to_ltcg <= 90 and days_to_ltcg > 0:
+                    tax_saving_opportunities.append({
+                        "type": "hold_for_ltcg",
+                        "asset_name": asset.name,
+                        "days_remaining": days_to_ltcg,
+                        "potential_tax_saving": gain_loss * (STCG_RATE - LTCG_RATE),
+                        "description": f"Hold {asset.name} for {days_to_ltcg} more days to qualify for LTCG"
+                    })
+        else:
+            # Loss harvesting opportunity
+            harvesting_suggestions.append({
+                "type": "loss_harvesting",
+                "asset_name": asset.name,
+                "loss_amount": abs(gain_loss),
+                "tax_benefit": abs(gain_loss) * 0.30,  # Assuming 30% tax bracket
+                "description": f"Realize loss of ₹{abs(gain_loss):,.0f} to offset gains"
+            })
+    
+    # Calculate actual tax liability
+    ltcg_taxable = max(0, total_ltcg - LTCG_EXEMPTION)
+    ltcg_liability = ltcg_taxable * LTCG_RATE
+    stcg_liability = total_stcg * STCG_RATE
+    
+    total_tax_liability = ltcg_liability + stcg_liability
+    total_gains = total_ltcg + total_stcg
+    effective_tax_rate = (total_tax_liability / total_gains * 100) if total_gains > 0 else 0
+    
+    # Add general tax saving opportunities
+    if total_ltcg > LTCG_EXEMPTION * 2:
+        tax_saving_opportunities.append({
+            "type": "ltcg_planning",
+            "description": "Consider staggered profit booking across financial years",
+            "potential_saving": (total_ltcg - LTCG_EXEMPTION) * LTCG_RATE * 0.3
+        })
+    
+    current_year_tax = {
+        "ltcg_gains": total_ltcg,
+        "stcg_gains": total_stcg,
+        "ltcg_exemption_used": min(total_ltcg, LTCG_EXEMPTION),
+        "ltcg_exemption_remaining": max(0, LTCG_EXEMPTION - total_ltcg)
+    }
+    
+    return TaxOptimization(
+        current_year_tax=current_year_tax,
+        ltcg_liability=ltcg_liability,
+        stcg_liability=stcg_liability,
+        tax_saving_opportunities=tax_saving_opportunities,
+        harvesting_suggestions=harvesting_suggestions,
+        total_tax_liability=total_tax_liability,
+        effective_tax_rate=effective_tax_rate
+    )
+
 def calculate_compound_growth(principal: float, annual_rate: float, annual_investment: float, years: int, 
                             monthly_sip: float = 0, step_up_percentage: float = 0) -> List[ProjectionResult]:
     """Calculate compound growth with annual investments and SIPs with step-ups"""
