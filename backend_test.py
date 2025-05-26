@@ -426,6 +426,105 @@ class WealthTrackerAPITester:
         else:
             return self.log_test("SIP Projections Calculation", False, f"Response: {response}")
 
+    def test_advanced_analytics_monte_carlo(self) -> bool:
+        """Test Monte Carlo simulation endpoint"""
+        params = {
+            "initial_value": 500000,
+            "annual_return": 12,
+            "volatility": 15,
+            "annual_investment": 100000,
+            "years": 20
+        }
+        
+        success, response = self.make_request("GET", "analytics/monte-carlo", params, 200, auth_required=True)
+        
+        if success and "percentile_10" in response:
+            monte_carlo = response
+            required_fields = ["percentile_10", "percentile_25", "percentile_50", "percentile_75", "percentile_90", "years", "final_values"]
+            all_present = all(field in monte_carlo for field in required_fields)
+            
+            if all_present:
+                final_values = monte_carlo["final_values"]
+                return self.log_test("Monte Carlo Simulation", True, 
+                                   f"Range: ₹{final_values['worst_case']:,.0f} - ₹{final_values['best_case']:,.0f}")
+            else:
+                return self.log_test("Monte Carlo Simulation", False, "Missing required fields")
+        else:
+            return self.log_test("Monte Carlo Simulation", False, f"Response: {response}")
+
+    def test_advanced_analytics_health_score(self) -> bool:
+        """Test financial health score calculation"""
+        success, response = self.make_request("GET", "analytics/financial-health-score", auth_required=True)
+        
+        if success and "overall_score" in response:
+            health_score = response
+            required_fields = ["overall_score", "category_scores", "recommendations", "strengths"]
+            all_present = all(field in health_score for field in required_fields)
+            score_valid = 0 <= health_score["overall_score"] <= 1000
+            
+            if all_present and score_valid:
+                return self.log_test("Financial Health Score", True, 
+                                   f"Score: {health_score['overall_score']}/1000")
+            else:
+                return self.log_test("Financial Health Score", False, 
+                                   f"Invalid structure or score: {health_score['overall_score']}")
+        else:
+            return self.log_test("Financial Health Score", False, f"Response: {response}")
+
+    def test_advanced_analytics_performance(self) -> bool:
+        """Test performance attribution analysis"""
+        success, response = self.make_request("GET", "analytics/performance-attribution", auth_required=True)
+        
+        if success and "asset_contributions" in response:
+            performance = response
+            required_fields = ["asset_contributions", "sector_analysis", "best_performers", "worst_performers"]
+            all_present = all(field in performance for field in required_fields)
+            
+            if all_present:
+                best_count = len(performance.get("best_performers", []))
+                sector_count = len(performance.get("sector_analysis", {}))
+                return self.log_test("Performance Attribution", True, 
+                                   f"Best performers: {best_count}, Sectors: {sector_count}")
+            else:
+                return self.log_test("Performance Attribution", False, "Missing required fields")
+        else:
+            return self.log_test("Performance Attribution", False, f"Response: {response}")
+
+    def test_advanced_analytics_tax_optimization(self) -> bool:
+        """Test tax optimization analysis"""
+        success, response = self.make_request("GET", "analytics/tax-optimization", auth_required=True)
+        
+        if success and "total_tax_liability" in response:
+            tax_data = response
+            required_fields = ["ltcg_liability", "stcg_liability", "tax_saving_opportunities", "total_tax_liability"]
+            all_present = all(field in tax_data for field in required_fields)
+            
+            if all_present:
+                return self.log_test("Tax Optimization", True, 
+                                   f"Tax Liability: ₹{tax_data['total_tax_liability']:,.0f}, "
+                                   f"Rate: {tax_data['effective_tax_rate']:.2f}%")
+            else:
+                return self.log_test("Tax Optimization", False, "Missing required fields")
+        else:
+            return self.log_test("Tax Optimization", False, f"Response: {response}")
+
+    def test_advanced_analytics_comprehensive_report(self) -> bool:
+        """Test comprehensive analytics report"""
+        success, response = self.make_request("GET", "analytics/comprehensive-report", auth_required=True)
+        
+        if success and "monte_carlo" in response:
+            report = response
+            required_sections = ["monte_carlo", "financial_health_score", "performance_attribution", "tax_optimization"]
+            all_present = all(section in report for section in required_sections)
+            
+            if all_present:
+                return self.log_test("Comprehensive Analytics Report", True, 
+                                   f"Sections: {list(report.keys())}")
+            else:
+                return self.log_test("Comprehensive Analytics Report", False, "Missing required sections")
+        else:
+            return self.log_test("Comprehensive Analytics Report", False, f"Response: {response}")
+
     def test_step_up_sip_calculation(self) -> bool:
         """Test step-up SIP calculation logic"""
         projection_data = [
