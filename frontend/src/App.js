@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
 import { LineChart, Line as RechartsLine, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Area, AreaChart, Bar, BarChart } from 'recharts';
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, ArrowRightOnRectangleIcon, ChartBarIcon, CurrencyDollarIcon, TrophyIcon, CogIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, UserIcon, ArrowRightOnRectangleIcon, ChartBarIcon, CurrencyDollarIcon, TrophyIcon, CogIcon, AdjustmentsHorizontalIcon, BeakerIcon, DocumentArrowDownIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import './App.css';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
@@ -40,9 +40,17 @@ function App() {
   const [goldPrices, setGoldPrices] = useState(null);
   const [milestones, setMilestones] = useState([]);
   const [projections, setProjections] = useState([]);
+  
+  // Advanced Analytics States
+  const [monteCarloData, setMonteCarloData] = useState(null);
+  const [financialHealthScore, setFinancialHealthScore] = useState(null);
+  const [performanceAttribution, setPerformanceAttribution] = useState(null);
+  const [taxOptimization, setTaxOptimization] = useState(null);
+  
   const [showModal, setShowModal] = useState(false);
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [showProjectionSettings, setShowProjectionSettings] = useState(false);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
   const [loading, setLoading] = useState(false);
   
@@ -98,6 +106,8 @@ function App() {
       } else if (currentView === 'projections') {
         fetchMilestones();
         generateProjections();
+      } else if (currentView === 'analytics') {
+        fetchAdvancedAnalytics();
       }
     }
   }, [user, currentView]);
@@ -159,6 +169,37 @@ function App() {
       setMilestones(response.data);
     } catch (error) {
       console.error('Failed to fetch milestones:', error);
+    }
+  };
+
+  const fetchAdvancedAnalytics = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all analytics in parallel
+      const [healthResponse, performanceResponse, taxResponse, monteCarloResponse] = await Promise.all([
+        axios.get(`${API}/analytics/financial-health-score`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API}/analytics/performance-attribution`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API}/analytics/tax-optimization`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API}/analytics/monte-carlo?years=20&volatility=15&simulations=5000`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      setFinancialHealthScore(healthResponse.data);
+      setPerformanceAttribution(performanceResponse.data);
+      setTaxOptimization(taxResponse.data);
+      setMonteCarloData(monteCarloResponse.data);
+    } catch (error) {
+      console.error('Failed to fetch advanced analytics:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -409,13 +450,40 @@ function App() {
     }));
   };
 
+  const getHealthScoreColor = (score) => {
+    if (score >= 800) return 'text-green-600';
+    if (score >= 600) return 'text-blue-600';
+    if (score >= 400) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getHealthScoreLabel = (score) => {
+    if (score >= 800) return 'Excellent';
+    if (score >= 600) return 'Good';
+    if (score >= 400) return 'Fair';
+    return 'Poor';
+  };
+
+  const getMonteCarloChartData = () => {
+    if (!monteCarloData) return null;
+    
+    return monteCarloData.years.map((year, index) => ({
+      year,
+      worst_case: monteCarloData.percentile_10[index],
+      pessimistic: monteCarloData.percentile_25[index],
+      most_likely: monteCarloData.percentile_50[index],
+      optimistic: monteCarloData.percentile_75[index],
+      best_case: monteCarloData.percentile_90[index]
+    }));
+  };
+
   if (!token) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Wealth Tracker</h1>
-            <p className="text-gray-600">Track your investments and net worth</p>
+            <p className="text-gray-600">Advanced Financial Analytics Platform</p>
           </div>
 
           <div className="flex mb-6">
@@ -488,7 +556,8 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Wealth Tracker</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Wealth Tracker Pro</h1>
+              <span className="ml-2 text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded-full">ADVANCED</span>
             </div>
             
             <nav className="flex space-x-8">
@@ -525,6 +594,17 @@ function App() {
                 <TrophyIcon className="h-4 w-4" />
                 <span>Projections</span>
               </button>
+              <button
+                onClick={() => setCurrentView('analytics')}
+                className={`px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 ${
+                  currentView === 'analytics'
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <BeakerIcon className="h-4 w-4" />
+                <span>Analytics</span>
+              </button>
             </nav>
 
             <div className="flex items-center space-x-4">
@@ -547,6 +627,27 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === 'dashboard' && dashboard && (
           <div className="space-y-6">
+            {/* Quick Financial Health Score */}
+            {financialHealthScore && (
+              <div className={`bg-gradient-to-r from-purple-500 to-pink-500 p-6 rounded-lg shadow text-white`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Financial Health Score</h3>
+                    <p className="text-3xl font-bold">{financialHealthScore.overall_score}/1000</p>
+                    <p className="text-sm opacity-90">{getHealthScoreLabel(financialHealthScore.overall_score)} Financial Health</p>
+                  </div>
+                  <div className="text-right">
+                    <button
+                      onClick={() => setCurrentView('analytics')}
+                      className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
+                    >
+                      View Full Analytics
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-lg shadow">
@@ -655,6 +756,220 @@ function App() {
           </div>
         )}
 
+        {currentView === 'analytics' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Advanced Analytics</h2>
+              <button
+                onClick={fetchAdvancedAnalytics}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center space-x-2"
+              >
+                <BeakerIcon className="h-4 w-4" />
+                <span>Refresh Analytics</span>
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Financial Health Score */}
+                {financialHealthScore && (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Health Score</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <div className="flex items-center space-x-4 mb-4">
+                          <div className="text-4xl font-bold text-purple-600">
+                            {financialHealthScore.overall_score}
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-500">out of 1000</div>
+                            <div className={`text-lg font-medium ${getHealthScoreColor(financialHealthScore.overall_score)}`}>
+                              {getHealthScoreLabel(financialHealthScore.overall_score)}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {Object.entries(financialHealthScore.category_scores).map(([category, score]) => (
+                            <div key={category} className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600 capitalize">{category.replace('_', ' ')}</span>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-24 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-purple-600 h-2 rounded-full"
+                                    style={{ width: `${(score / 200) * 100}%` }}
+                                  ></div>
+                                </div>
+                                <span className="text-sm font-medium">{score}/200</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Recommendations</h4>
+                        <div className="space-y-2">
+                          {financialHealthScore.recommendations.map((rec, index) => (
+                            <div key={index} className="flex items-start space-x-2">
+                              <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500 mt-0.5" />
+                              <span className="text-sm text-gray-600">{rec}</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <h4 className="font-medium text-gray-900 mb-3 mt-4">Strengths</h4>
+                        <div className="space-y-2">
+                          {financialHealthScore.strengths.map((strength, index) => (
+                            <div key={index} className="flex items-start space-x-2">
+                              <CheckCircleIcon className="h-4 w-4 text-green-500 mt-0.5" />
+                              <span className="text-sm text-gray-600">{strength}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Monte Carlo Simulation */}
+                {monteCarloData && (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Monte Carlo Simulation (20 Years)</h3>
+                    <div className="h-96 mb-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={getMonteCarloChartData()}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="year" />
+                          <YAxis tickFormatter={(value) => `₹${(value / 100000).toFixed(1)}L`} />
+                          <RechartsTooltip 
+                            formatter={(value, name) => [formatCurrency(value), name]}
+                            labelFormatter={(year) => `Year ${year}`}
+                          />
+                          <Area type="monotone" dataKey="best_case" stroke="#10B981" fill="#6EE7B7" fillOpacity={0.1} name="Best Case (90th percentile)" />
+                          <Area type="monotone" dataKey="optimistic" stroke="#3B82F6" fill="#93C5FD" fillOpacity={0.2} name="Optimistic (75th percentile)" />
+                          <Area type="monotone" dataKey="most_likely" stroke="#6366F1" fill="#A5B4FC" fillOpacity={0.4} name="Most Likely (50th percentile)" />
+                          <Area type="monotone" dataKey="pessimistic" stroke="#F59E0B" fill="#FCD34D" fillOpacity={0.2} name="Pessimistic (25th percentile)" />
+                          <Area type="monotone" dataKey="worst_case" stroke="#EF4444" fill="#FCA5A5" fillOpacity={0.1} name="Worst Case (10th percentile)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="grid grid-cols-5 gap-4">
+                      {Object.entries(monteCarloData.final_values).map(([scenario, value]) => (
+                        <div key={scenario} className="text-center">
+                          <div className="text-xs text-gray-500 capitalize">{scenario.replace('_', ' ')}</div>
+                          <div className="text-lg font-bold">{formatCurrency(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Performance Attribution */}
+                {performanceAttribution && (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Attribution</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Best Performers</h4>
+                        <div className="space-y-2">
+                          {performanceAttribution.best_performers.map((asset, index) => (
+                            <div key={index} className="flex justify-between items-center p-2 bg-green-50 rounded">
+                              <span className="text-sm text-gray-900">{asset.name}</span>
+                              <span className="text-sm font-medium text-green-600">
+                                +{asset.return_percentage.toFixed(1)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Sector Analysis</h4>
+                        <div className="space-y-2">
+                          {Object.entries(performanceAttribution.sector_analysis).map(([sector, data]) => (
+                            <div key={sector} className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">{sector}</span>
+                              <div className="text-right">
+                                <div className="text-sm font-medium">{data.allocation_percentage.toFixed(1)}%</div>
+                                <div className={`text-xs ${data.average_return >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {data.average_return.toFixed(1)}% return
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tax Optimization */}
+                {taxOptimization && (
+                  <div className="bg-white p-6 rounded-lg shadow">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Tax Optimization</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="bg-red-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-red-800 mb-2">Tax Liability</h4>
+                        <div className="text-2xl font-bold text-red-600">
+                          {formatCurrency(taxOptimization.total_tax_liability)}
+                        </div>
+                        <div className="text-sm text-red-600">
+                          Effective Rate: {taxOptimization.effective_tax_rate.toFixed(2)}%
+                        </div>
+                      </div>
+                      
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-blue-800 mb-2">LTCG Details</h4>
+                        <div className="text-lg font-bold text-blue-600">
+                          {formatCurrency(taxOptimization.ltcg_liability)}
+                        </div>
+                        <div className="text-sm text-blue-600">
+                          Gains: {formatCurrency(taxOptimization.current_year_tax.ltcg_gains)}
+                        </div>
+                      </div>
+                      
+                      <div className="bg-orange-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-orange-800 mb-2">STCG Details</h4>
+                        <div className="text-lg font-bold text-orange-600">
+                          {formatCurrency(taxOptimization.stcg_liability)}
+                        </div>
+                        <div className="text-sm text-orange-600">
+                          Gains: {formatCurrency(taxOptimization.current_year_tax.stcg_gains)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {taxOptimization.tax_saving_opportunities.length > 0 && (
+                      <div className="mt-6">
+                        <h4 className="font-medium text-gray-900 mb-3">Tax Saving Opportunities</h4>
+                        <div className="space-y-2">
+                          {taxOptimization.tax_saving_opportunities.map((opportunity, index) => (
+                            <div key={index} className="p-3 bg-yellow-50 rounded border-l-4 border-yellow-400">
+                              <div className="text-sm text-gray-800">{opportunity.description}</div>
+                              {opportunity.potential_tax_saving && (
+                                <div className="text-xs text-green-600 mt-1">
+                                  Potential Saving: {formatCurrency(opportunity.potential_tax_saving)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Other views remain the same as before */}
         {currentView === 'assets' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -883,6 +1198,7 @@ function App() {
         )}
       </main>
 
+      {/* Modals remain the same as before */}
       {/* Add/Edit Asset Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style={{pointerEvents: 'none'}}>
