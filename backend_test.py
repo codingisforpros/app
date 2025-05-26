@@ -689,6 +689,14 @@ class WealthTrackerAPITester:
         self.test_sip_projections_calculation()
         self.test_step_up_sip_calculation()
 
+        # REVOLUTIONARY ADVANCED ANALYTICS TESTS
+        print(f"\n🧠 REVOLUTIONARY ADVANCED ANALYTICS TESTS")
+        self.test_advanced_analytics_monte_carlo()
+        self.test_advanced_analytics_health_score()
+        self.test_advanced_analytics_performance()
+        self.test_advanced_analytics_tax_optimization()
+        self.test_advanced_analytics_comprehensive_report()
+
         # Enhanced Dashboard Tests
         print(f"\n📊 Enhanced Dashboard Tests")
         self.test_dashboard_with_gold_updates()
