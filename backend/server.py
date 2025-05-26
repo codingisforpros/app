@@ -152,6 +152,60 @@ class ProjectionResult(BaseModel):
     sip_contribution: float = 0
     lumpsum_contribution: float = 0
 
+class MonteCarloResult(BaseModel):
+    percentile_10: List[float]
+    percentile_25: List[float]
+    percentile_50: List[float]  # Median
+    percentile_75: List[float]
+    percentile_90: List[float]
+    years: List[int]
+    confidence_range: str
+    final_values: Dict[str, float]
+
+class FinancialHealthScore(BaseModel):
+    overall_score: int  # 0-1000
+    category_scores: Dict[str, int]
+    recommendations: List[str]
+    strengths: List[str]
+    areas_for_improvement: List[str]
+
+class PerformanceAttribution(BaseModel):
+    asset_contributions: Dict[str, float]
+    sector_analysis: Dict[str, Dict[str, float]]
+    time_weighted_returns: Dict[str, float]
+    best_performers: List[Dict[str, Any]]
+    worst_performers: List[Dict[str, Any]]
+    correlation_matrix: Dict[str, Dict[str, float]]
+
+class TaxOptimization(BaseModel):
+    current_year_tax: Dict[str, float]
+    ltcg_liability: float
+    stcg_liability: float
+    tax_saving_opportunities: List[Dict[str, Any]]
+    harvesting_suggestions: List[Dict[str, Any]]
+    total_tax_liability: float
+    effective_tax_rate: float
+
+class ExpenseCategory(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    category: str
+    amount: float
+    date: datetime
+    description: str
+    is_recurring: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class IncomeEntry(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    source: str
+    amount: float
+    date: datetime
+    description: str
+    is_recurring: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 class DashboardSummary(BaseModel):
     total_net_worth: float
     total_investment: float
